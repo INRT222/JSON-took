@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JSON 格式化工具</title>
+<script>
+  /* 提前设置主题，避免首屏闪烁 */
+  (function () {
+    try {
+      var t = localStorage.getItem('jsonfmt-theme');
+      if (t !== 'light' && t !== 'dark') {
+        t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    } catch (e) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  })();
+</script>
+<style>
+  /* ---------------- 主题变量 ---------------- */
+  :root{
+    --bg:#0e1016;
+    --bg-glow:#1b2233;
+    --text:#e6e9f0;
+    --text-dim:#8b93a7;
+    --text-mute:#5d6579;
+    --placeholder:#4c5468;
+    --panel:#171a23;
+    --panel-head:#141822;
+    --border:#262b38;
+    --input-text:#dfe4ef;
+    --btn-bg:#222839;
+    --btn-border:#2f374a;
+    --btn-hover-bg:#2a3245;
+    --btn-hover-border:#3b455c;
+    --accent:#3b74e8;
+    --accent-hover:#4a82f5;
+    --toast-bg:#2b3346;
+    --toast-border:#3b455c;
+    --drag-bg:rgba(59,116,232,.15);
+    --err:#ff8a8a;
+    --ok:#4ecb8a;
+    --ok-bg:rgba(78,203,138,.12);
+    --ok-border:rgba(78,203,138,.45);
+    --bad:#ff7b7b;
+    --bad-bg:rgba(255,123,123,.12);
+    --bad-border:rgba(255,123,123,.45);
+    --bad-strong:#ff5f5f;
+    --mark-bg:rgba(255,95,95,.32);
+    --mark-ring:rgba(255,95,95,.62);
+    --shadow:none;
+    --scroll:rgba(255,255,255,.14);
+    /* JSON 语法配色 */
+    --j-key:#79a9ff;
+    --j-str:#8fdc8f;
+    --j-num:#f0b072;
+    --j-bool:#c79bf5;
+    --j-null:#8b93a7;
+  }
+  html[data-theme="light"]{
+    --bg:#eef1f7;
+    --bg-glow:#ffffff;
+    --text:#1c2230;
+    --text-dim:#5f6879;
+    --text-mute:#8a92a3;
+    --placeholder:#a6adbb;
+    --panel:#ffffff;
+    --panel-head:#f7f9fc;
+    --border:#e1e6ef;
+    --input-text:#1f2a3d;
+    --btn-bg:#f1f4f9;
+    --btn-border:#dbe1ec;
+    --btn-hover-bg:#e6ebf4;
+    --btn-hover-border:#c8d2e3;
+    --accent:#3b74e8;
+    --accent-hover:#2f66d8;
+    --toast-bg:#242b3a;
+    --toast-border:#39425a;
+    --drag-bg:rgba(59,116,232,.10);
+    --err:#d93b3b;
+    --ok:#1e8f56;
+    --ok-bg:rgba(30,143,86,.10);
+    --ok-border:rgba(30,143,86,.40);
+    --bad:#d93b3b;
+    --bad-bg:rgba(217,59,59,.10);
+    --bad-border:rgba(217,59,59,.40);
+    --bad-strong:#c62c2c;
+    --mark-bg:rgba(217,59,59,.22);
+    --mark-ring:rgba(217,59,59,.50);
+    --shadow:0 1px 2px rgba(16,24,40,.04), 0 8px 24px rgba(16,24,40,.05);
+    --scroll:rgba(0,0,0,.18);
+    --j-key:#1f5fd0;
+    --j-str:#167d3f;
+    --j-num:#b45309;
+    --j-bool:#7c3aed;
+    --j-null:#6b7280;
+  }
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;min-height:100vh;color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    background:radial-gradient(1100px 560px at 15% -10%,var(--bg-glow) 0%,var(--bg) 62%) var(--bg);
+    transition:background-color .25s ease,color .25s ease;
+  }
+  .wrap{max-width:1240px;margin:0 auto;padding:28px 20px 44px}
+  h1{font-size:20px;margin:0 0 6px;font-weight:600;letter-spacing:.3px}
+  .sub{margin:0 0 18px;color:var(--text-dim);font-size:13px}
+
+  .toolbar{
+    display:flex;flex-wrap:wrap;gap:14px 20px;align-items:center;
+    padding:13px 16px;background:var(--panel);border:1px solid var(--border);
+    border-radius:12px;margin-bottom:16px;box-shadow:var(--shadow);
+    transition:background-color .25s ease,border-color .25s ease;
+  }
+  .field{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim)}
+  select{
+    background:var(--panel-head);color:var(--text);border:1px solid var(--border);border-radius:8px;
+    padding:7px 10px;font-size:13px;outline:none;cursor:pointer;
+    transition:background-color .25s ease,border-color .15s,color .25s ease;
+  }
+  select:focus{border-color:var(--accent)}
+  .spacer{flex:1}
+
+  .validate-badge{
+    display:inline-flex;align-items:center;
+    padding:7px 13px;border-radius:8px;font-size:13px;font-weight:600;
+    white-space:nowrap;border:1px solid transparent;
+    animation:pop .2s ease;
+  }
+  .validate-badge[hidden]{display:none}
+  .validate-badge.ok{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-border)}
+  .validate-badge.bad{color:var(--bad);background:var(--bad-bg);border-color:var(--bad-border)}
+  @keyframes pop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+
+  .theme-toggle{
+    display:inline-flex;align-items:center;gap:7px;
+    background:var(--btn-bg);border:1px solid var(--btn-border);color:var(--text);
+    border-radius:999px;padding:7px 14px 7px 11px;font-size:13px;cursor:pointer;
+    transition:background-color .15s,border-color .15s,color .25s ease,transform .1s;
+  }
+  .theme-toggle:hover{background:var(--btn-hover-bg);border-color:var(--btn-hover-border)}
+  .theme-toggle:active{transform:scale(.97)}
+  .theme-toggle svg{width:15px;height:15px;flex:none;display:block}
+  html[data-theme="dark"]  .icon-sun{display:none}
+  html[data-theme="light"] .icon-moon{display:none}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media (max-width:880px){.grid{grid-template-columns:1fr}}
+
+  .panel{
+    position:relative;display:flex;flex-direction:column;min-height:470px;
+    background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden;
+    box-shadow:var(--shadow);
+    transition:background-color .25s ease,border-color .25s ease;
+  }
+  @media (max-width:880px){.panel{min-height:320px}}
+  .panel-head{
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    padding:10px 14px;border-bottom:1px solid var(--border);background:var(--panel-head);
+    font-size:13px;color:var(--text-dim);
+    transition:background-color .25s ease,border-color .25s ease,color .25s ease;
+  }
+  .panel-body{position:relative;flex:1;display:flex;min-height:0}
+
+  /* ---------------- 输入区编辑器（textarea + 高亮层） ---------------- */
+  .editor-wrap{position:relative;flex:1;min-height:0;display:flex;overflow:hidden}
+
+  #input{
+    width:100%;border:0;outline:none;resize:none;background:transparent;
+    color:var(--input-text);padding:14px;tab-size:2;caret-color:var(--accent);
+    font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,"Courier New",monospace;
+    position:relative;z-index:1;flex:1;min-height:0;
+    transition:color .25s ease;
+  }
+  #input::placeholder{color:var(--placeholder)}
+  #input::selection{background:rgba(59,116,232,.32)}
+  #input::-webkit-scrollbar{width:10px;height:10px}
+  #input::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px}
+  #input::-webkit-scrollbar-track{background:transparent}
+
+  /* 高亮层：与 textarea 完全相同的排版，文字透明，只显示标记背景 */
+  .highlight-layer{
+    position:absolute;inset:0;z-index:0;
+    padding:14px;tab-size:2;
+    font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,"Courier New",monospace;
+    white-space:pre-wrap;
+    word-break:break-word;
+    overflow-wrap:break-word;
+    overflow:hidden;
+    color:transparent;
+    pointer-events:none;
+    user-select:none;
+  }
+  .highlight-layer mark{
+    background:var(--mark-bg);
+    color:transparent;
+    border-radius:3px;
+    box-shadow:inset 0 0 0 1px var(--mark-ring);
+    animation:markPulse .5s ease;
+  }
+  .highlight-layer mark.nl{
+    display:inline-block;width:0;height:1.1em;
+    vertical-align:text-bottom;
+    border-left:3px solid var(--bad-strong);
+    background:transparent;box-shadow:none;border-radius:0;
+    transform:translateX(-1.5px);
+    animation:markPulse .5s ease;
+  }
+  @keyframes markPulse{from{opacity:.25}to{opacity:1}}
+
+  .panel-foot{
+    display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+    padding:10px 12px;border-top:1px solid var(--border);background:var(--panel-head);
+    transition:background-color .25s ease,border-color .25s ease;
+  }
+  button{
+    background:var(--btn-bg);color:var(--text);border:1px solid var(--btn-border);border-radius:8px;
+    padding:8px 14px;font-size:13px;cursor:pointer;
+    transition:background-color .15s,border-color .15s,color .25s ease,transform .1s,opacity .15s;
+  }
+  button:hover{background:var(--btn-hover-bg);border-color:var(--btn-hover-border)}
+  button:active{transform:scale(.98)}
+  button:disabled{opacity:.38;cursor:not-allowed;pointer-events:none}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+  button.check{background:transparent;border-color:var(--accent);color:var(--accent)}
+  button.check:hover{background:rgba(59,116,232,.10)}
+  .hint,.status{font-size:12px;color:var(--text-mute)}
+  .status.err{color:var(--err)}
+
+  /* ---------------- 输出：可折叠的 JSON 树 ---------------- */
+  #output{
+    flex:1;min-height:0;overflow:auto;padding:12px 14px;
+    font:13px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,"Courier New",monospace;
+    color:var(--input-text);white-space:pre;
+    transition:color .25s ease;
+  }
+  #output[hidden]{display:none}
+  #output::-webkit-scrollbar{width:10px;height:10px}
+  #output::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px}
+  #output::-webkit-scrollbar-track{background:transparent}
+  #output:empty::before{
+    content:'格式化后的 JSON 会显示在这里…';
+    color:var(--placeholder);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+
+  .json-tree{display:inline-block;min-width:100%;vertical-align:top}
+  .t-node{display:block}
+  .t-line{padding-right:16px}
+
+  .t-toggle{
+    display:inline-block;width:16px;height:1.7em;line-height:1.7em;
+    text-align:center;vertical-align:top;cursor:pointer;
+    color:var(--text-mute);user-select:none;transition:color .15s;
+  }
+  .t-toggle::before{
+    content:'';display:inline-block;vertical-align:middle;
+    border-top:4px solid transparent;border-bottom:4px solid transparent;
+    border-left:5px solid currentColor;
+    transition:transform .16s ease;
+  }
+  .t-toggle:hover{color:var(--text)}
+  .t-node.is-open > .t-open-line > .t-toggle::before{transform:rotate(90deg)}
+  .t-toggle-empty{cursor:default}
+  .t-toggle-empty::before{display:none}
+
+  .t-collapsed{display:none}
+  .t-node:not(.is-open) > .t-open-line > .t-collapsed{display:inline}
+  .t-node:not(.is-open) > .t-children,
+  .t-node:not(.is-open) > .t-close-line{display:none}
+
+  .t-key{color:var(--j-key)}
+  .t-str{color:var(--j-str)}
+  .t-num{color:var(--j-num)}
+  .t-bool{color:var(--j-bool)}
+  .t-null{color:var(--j-null);font-style:italic}
+  .t-punct{color:var(--text-mute)}
+  .t-summary{color:var(--text-mute);font-style:italic;margin:0 2px}
+
+  /* ---------------- 错误诊断卡片 ---------------- */
+  .err-card{
+    position:absolute;inset:0;overflow:auto;
+    padding:16px;display:flex;flex-direction:column;gap:15px;
+    background:var(--panel);font-size:13px;line-height:1.62;
+    animation:fadeIn .18s ease;
+  }
+  .err-card[hidden]{display:none}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  .err-card::-webkit-scrollbar{width:10px}
+  .err-card::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px}
+
+  .err-head{display:flex;gap:11px;align-items:flex-start}
+  .err-icon{
+    flex:none;width:26px;height:26px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--bad-bg);border:1px solid var(--bad-border);
+    color:var(--bad);font-weight:700;font-size:13px;line-height:1;
+  }
+  .err-title{font-weight:600;color:var(--text);font-size:14px;line-height:1.4}
+  .err-meta{
+    color:var(--text-mute);font-size:12px;margin-top:3px;word-break:break-word;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  .err-section{display:flex;flex-direction:column;gap:7px}
+  .err-label{
+    font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--text-mute);font-weight:600;
+  }
+  .err-text{color:var(--text)}
+  .err-code{
+    background:var(--panel-head);border:1px solid var(--border);border-radius:8px;
+    padding:10px 0;overflow-x:auto;
+    font:12.5px/1.75 ui-monospace,SFMono-Regular,Menlo,Consolas,"Courier New",monospace;
+  }
+  .err-code::-webkit-scrollbar{height:8px}
+  .err-code::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px}
+  .code-line{display:flex;white-space:pre;padding:0 12px}
+  .code-line.bad{background:var(--bad-bg)}
+  .code-line .ln{
+    flex:none;width:3.2em;text-align:right;padding-right:12px;
+    color:var(--text-mute);user-select:none;
+  }
+  .code-line .src{white-space:pre}
+  .code-line mark{
+    background:var(--bad-strong);color:#fff;border-radius:3px;padding:0 1px;
+  }
+  .err-tips{margin:0;padding-left:19px;color:var(--text-dim)}
+  .err-tips li{margin:4px 0}
+  .err-jump{
+    display:inline-flex;align-items:center;gap:6px;align-self:flex-start;
+    background:var(--btn-bg);border:1px solid var(--btn-border);color:var(--text);
+    border-radius:8px;padding:7px 13px;font-size:12.5px;cursor:pointer;
+  }
+  .err-jump:hover{background:var(--btn-hover-bg)}
+
+  .drag-over::after{
+    content:"松开鼠标读取文件";
+    position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;
+    background:var(--drag-bg);border:2px dashed var(--accent);border-radius:12px;
+    color:var(--accent);font-size:15px;pointer-events:none;
+  }
+  #toast{
+    position:fixed;left:50%;bottom:34px;transform:translate(-50%,16px);
+    background:var(--toast-bg);border:1px solid var(--toast-border);color:#fff;
+    padding:10px 18px;border-radius:999px;font-size:13px;
+    opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:99;
+    box-shadow:0 8px 24px rgba(0,0,0,.28);
+  }
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>JSON 格式化工具</h1>
+  <p class="sub">粘贴或拖入 JSON 文件，自动格式化并定位错误，支持逐层展开 / 折叠，一键复制</p>
+
+  <!-- 工具栏 -->
+  <div class="toolbar">
+    <div class="field">
+      <label for="indent">缩进</label>
+      <select id="indent">
+        <option value="2">2 空格</option>
+        <option value="4">4 空格</option>
+        <option value="tab">制表符</option>
+        <option value="min">压缩（单行）</option>
+      </select>
+    </div>
+    <span class="spacer"></span>
+
+    <button class="check" id="validate" title="快捷键：Ctrl / Cmd + Enter">校验 JSON</button>
+    <span class="validate-badge" id="validateBadge" hidden></span>
+
+    <button class="theme-toggle" id="themeToggle" title="切换深色 / 浅色模式" aria-label="切换深色或浅色模式">
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="4.2"></circle>
+        <path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"></path>
+      </svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"></path>
+      </svg>
+      <span id="themeLabel">暗色</span>
+    </button>
+  </div>
+
+  <!-- 双栏 -->
+  <div class="grid">
+    <!-- 左：输入 -->
+    <section class="panel" id="inputPanel">
+      <div class="panel-head">
+        <span>原始 JSON</span>
+        <span class="hint" id="inputHint">支持把文件拖到这里</span>
+      </div>
+      <div class="panel-body">
+        <div class="editor-wrap" id="editorWrap">
+          <div class="highlight-layer" id="highlightLayer" aria-hidden="true"></div>
+          <textarea id="input" spellcheck="false"
+            placeholder='在此粘贴 JSON，或把文件拖进这个区域…&#10;&#10;例如：&#10;{"name":"demo","tags":["a","b"],"meta":{"ok":true}}'></textarea>
+        </div>
+      </div>
+      <div class="panel-foot">
+        <button id="pick">选择文件</button>
+        <button id="clear">清空</button>
+        <input type="file" id="file" accept=".json,.txt,application/json,text/plain" hidden>
+        <span class="hint" id="fileInfo"></span>
+      </div>
+    </section>
+
+    <!-- 右：输出 -->
+    <section class="panel">
+      <div class="panel-head">
+        <span>格式化结果</span>
+        <span class="status" id="status"></span>
+      </div>
+      <div class="panel-body">
+        <div id="output"></div>
+        <div class="err-card" id="errorCard" hidden></div>
+      </div>
+      <div class="panel-foot">
+        <button id="expandAll" title="展开所有层级">全部展开</button>
+        <button id="collapseAll" title="折叠所有层级（保留根节点）">全部折叠</button>
+        <button id="copy" class="primary">复制</button>
+        <button id="download">下载 .json</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  const $ = (s) => document.querySelector(s);
+
+  const inputEl    = $('#input');
+  const outputEl   = $('#output');
+  const indentEl   = $('#indent');
+  const statusEl   = $('#status');
+  const fileInfoEl = $('#fileInfo');
+  const inputPanel = $('#inputPanel');
+  const editorWrap = $('#editorWrap');
+  const hlLayer    = $('#highlightLayer');
+  const inputHint  = $('#inputHint');
+  const themeBtn   = $('#themeToggle');
+  const themeLabel = $('#themeLabel');
+  const badgeEl    = $('#validateBadge');
+  const errorCard  = $('#errorCard');
+  const copyBtn    = $('#copy');
+  const downloadBtn= $('#download');
+  const expandBtn  = $('#expandAll');
+  const collapseBtn= $('#collapseAll');
+
+  const THEME_KEY = 'jsonfmt-theme';
+  const AUTO_COLLAPSE_THRESHOLD = 20000;  // 节点数超过则自动折叠
+
+  let fileName = '';
+  let timer = null;
+  let lastErrPos = null;
+  let currentFormatted = '';   // 复制 / 下载用的文本
+  let currentParsed = null;
+
+  /* ================= 主题 ================= */
+
+  function applyTheme(theme, persist) {
+    document.documentElement.setAttribute('data-theme', theme);
+    themeLabel.textContent = theme === 'light' ? '亮色' : '暗色';
+    if (persist) { try { localStorage.setItem(THEME_KEY, theme); } catch (e) {} }
+  }
+  function initTheme() {
+    applyTheme(document.documentElement.getAttribute('data-theme') || 'dark', false);
+  }
+  themeBtn.addEventListener('click', () => {
+    const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    applyTheme(next, true);
+    toast(next === 'light' ? '已切换到亮色模式' : '已切换到暗色模式');
+  });
+  try {
+    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', (e) => {
+      let saved = null;
+      try { saved = localStorage.getItem(THEME_KEY); } catch (err) {}
+      if (!saved) applyTheme(e.matches ? 'light' : 'dark', false);
+    });
+  } catch (e) {}
+
+  /* ================= 通用工具 ================= */
+
+  const byteLen = (s) => new Blob([s]).size;
+
+  function formatSize(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+    return (n / 1048576).toFixed(2) + ' MB';
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    const t = $('#toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 1700);
+  }
+
+  function setStatus(text, isErr) {
+    statusEl.textContent = text || '';
+    statusEl.classList.toggle('err', !!isErr);
+  }
+
+  function getIndent() {
+    const v = indentEl.value;
+    if (v === 'min') return null;
+    if (v === 'tab') return '\t';
+    return Number(v);
+  }
+
+  /* ================= 位置换算 ================= */
+
+  function indexToLineCol(raw, index) {
+    const before = raw.slice(0, index);
+    const line = before.split('\n').length;
+    const col = index - before.lastIndexOf('\n');
+    return { line, col };
+  }
+
+  function lineColToIndex(raw, line, col) {
+    const lines = raw.split('\n');
+    if (line < 1 || line > lines.length) return null;
+    let idx = 0;
+    for (let i = 0; i < line - 1; i++) idx += lines[i].length + 1;
+    return Math.min(idx + col - 1, raw.length);
+  }
+
+  function extractPosition(msg, raw) {
+    let m = msg.match(/position\s+(\d+)/i);
+    if (m) return Math.min(Number(m[1]), raw.length);
+
+    m = msg.match(/line\s+(\d+)\s+column\s+(\d+)/i);
+    if (m) {
+      const idx = lineColToIndex(raw, Number(m[1]), Number(m[2]));
+      if (idx != null) return idx;
+    }
+    m = msg.match(/unexpected token\s+['"“]?([\s\S])/i)
+     || msg.match(/unexpected character\s+['"“]?([\s\S])/i);
+    if (m && m[1] !== undefined) {
+      const idx = raw.indexOf(m[1]);
+      if (idx >= 0) return idx;
+    }
+    return null;
+  }
+
+  function checkBalance(raw) {
+    let braces = 0, brackets = 0;
+    let inStr = false, quote = '', escFlag = false;
+    for (let i = 0; i < raw.length; i++) {
+      const c = raw[i];
+      if (inStr) {
+        if (escFlag) { escFlag = false; continue; }
+        if (c === '\\') { escFlag = true; continue; }
+        if (c === quote) inStr = false;
+        continue;
+      }
+      if (c === '"' || c === "'") { inStr = true; quote = c; continue; }
+      if (c === '{') braces++;
+      else if (c === '}') braces--;
+      else if (c === '[') brackets++;
+      else if (c === ']') brackets--;
+    }
+    return { openBraces: Math.max(0, braces), openBrackets: Math.max(0, brackets) };
+  }
+
+  /* ================= 错误诊断 ================= */
+
+  function diagnose(raw, err) {
+    const msg = err && err.message ? err.message : '解析失败';
+    const low = msg.toLowerCase();
+    const pos = extractPosition(msg, raw);
+    const ch  = (pos != null && pos < raw.length) ? raw[pos] : null;
+
+    /* 1. 尾随逗号 */
+    if (pos != null) {
+      if (ch === '}' || ch === ']') {
+        const before = raw.slice(0, pos).replace(/\s+$/, '');
+        if (before.endsWith(',')) {
+          return {
+            pos,
+            reason: `在 ${ch} 之前多了一个逗号：JSON 不允许「尾随逗号」，最后一项后面不能再跟逗号。`,
+            tips: ['删掉最后一个属性 / 元素后面的逗号',
+                   `正确写法：… 最后一个值 ${ch}`]
+          };
+        }
+      }
+      if (ch === ',') {
+        const after = raw.slice(pos + 1).match(/^\s*([}\]])/);
+        if (after) {
+          return {
+            pos,
+            reason: `这个逗号后面直接跟着 ${after[1]}，属于尾随逗号，JSON 标准不允许。`,
+            tips: ['直接删除这个逗号即可']
+          };
+        }
+      }
+    }
+
+    /* 2. 单引号 */
+    if (ch === "'") {
+      return {
+        pos,
+        reason: 'JSON 规范要求字符串和属性名必须使用双引号 " 包裹，这里出现了单引号 \'。',
+        tips: ['把单引号 \' 全部替换为双引号 "',
+               '若字符串内部本身就含双引号，请用 \\" 转义']
+      };
+    }
+
+    /* 3. 内容不完整 */
+    if (/unexpected end|end of json input|unterminated|premature|end of data/i.test(low)
+        || (pos != null && pos >= raw.length)) {
+      const b = checkBalance(raw);
+      let extra = '';
+      if (b.openBraces || b.openBrackets) {
+        extra = `（当前有 ${b.openBraces} 个 { 、${b.openBrackets} 个 [ 尚未闭合）`;
+      }
+      return {
+        pos: raw.length,
+        reason: 'JSON 内容不完整：读到结尾时仍有结构没有闭合' + extra + '。',
+        tips: ['检查末尾是否缺少 } 或 ]',
+               '检查字符串的引号是否成对出现',
+               '如果是从文件 / 网页复制的，确认内容没有被截断']
+      };
+    }
+
+    /* 4. 属性名不合法 */
+    if (/property name/i.test(low)) {
+      return {
+        pos,
+        reason: '对象的属性名不合法：JSON 中属性名必须是用双引号包裹的字符串。',
+        tips: ['写成 "key": value 的形式',
+               '检查上一条属性后面是否漏写了逗号']
+      };
+    }
+
+    /* 5. 缺少逗号 */
+    if (/expected\s*','|expected comma/i.test(low)) {
+      return {
+        pos,
+        reason: '缺少分隔符：两个属性或数组元素之间必须用英文逗号 , 分隔。',
+        tips: ['在上一个值后面补上英文逗号 ,']
+      };
+    }
+
+    /* 6. 裸键名 */
+    if (ch && /[A-Za-z_$]/.test(ch)) {
+      const before = raw.slice(0, pos).replace(/\s+$/, '');
+      if (before.endsWith('{') || before.endsWith(',')) {
+        const word = (raw.slice(pos).match(/^[A-Za-z_$][\w$]*/) || [ch])[0];
+        return {
+          pos,
+          reason: `属性名 ${word} 没有使用双引号包裹，JSON 不接受裸键名。`,
+          tips: [`改成 "${word}":`]
+        };
+      }
+    }
+
+    /* 7. 非法字面量 */
+    const around = raw.slice(Math.max(0, (pos || 0) - 12), (pos || 0) + 20);
+    const lit = around.match(/\b(NaN|Infinity|undefined|None|True|False)\b/);
+    if (lit) {
+      return {
+        pos,
+        reason: `JSON 标准不支持 ${lit[1]} 这样的字面量。`,
+        tips: ['用 null 代替 undefined / None',
+               '布尔值只能是小写的 true / false',
+               'NaN / Infinity 需要改写成字符串或 null']
+      };
+    }
+
+    /* 8. 兜底 */
+    if (ch) {
+      const shown = ch === '\n' ? '\\n' : ch === '\t' ? '\\t' : ch === ' ' ? '空格' : ch;
+      return {
+        pos,
+        reason: `解析到该位置时遇到了无法识别的字符「${shown}」，它不符合 JSON 语法。`,
+        tips: ['检查该字符附近是否有拼写错误',
+               '对照下方的「出错位置」上下文定位问题',
+               '可用更小的片段逐步排查是哪一段出错']
+      };
+    }
+
+    return {
+      pos: null,
+      reason: 'JSON 解析失败，但浏览器未给出明确的出错位置。',
+      tips: ['检查引号、逗号、括号是否成对',
+             '确认内容确实是 JSON 格式，而不是 JS 对象字面量',
+             '可尝试分段粘贴，逐步缩小排查范围']
+    };
+  }
+
+  /* ================= 原始输入区高亮 ================= */
+
+  function syncScroll() {
+    hlLayer.scrollTop = inputEl.scrollTop;
+    hlLayer.scrollLeft = inputEl.scrollLeft;
+  }
+
+  function syncLayerWidth() {
+    // 补偿 textarea 滚动条宽度，保证换行位置与高亮层完全一致
+    const sbw = inputEl.offsetWidth - inputEl.clientWidth;
+    hlLayer.style.paddingRight = (14 + Math.max(0, sbw)) + 'px';
+  }
+
+  function updateHighlight(raw, pos) {
+    if (!raw) { hlLayer.innerHTML = ''; return; }
+
+    let html;
+
+    if (pos == null || pos < 0) {
+      html = esc(raw);
+    } else if (pos >= raw.length) {
+      html = esc(raw) + '<mark class="nl"></mark>';
+    } else {
+      const before = raw.slice(0, pos);
+      const ch = raw[pos];
+      const after = raw.slice(pos + 1);
+      html = esc(before);
+      if (ch === '\n') {
+        html += '<mark class="nl"></mark>' + esc(after);
+      } else if (ch === '\r') {
+        html += esc(after);
+      } else {
+        html += '<mark>' + esc(ch) + '</mark>' + esc(after);
+      }
+    }
+
+    if (raw.endsWith('\n')) html += ' ';
+
+    hlLayer.innerHTML = html;
+    syncLayerWidth();
+    syncScroll();
+  }
+
+  /* 把出错位置滚动到视野中央 */
+  function scrollToError(pos) {
+    if (pos == null || pos < 0) return;
+    const raw = inputEl.value;
+    const idx = Math.min(pos, raw.length);
+    const { line } = indexToLineCol(raw, idx);
+
+    const cs = getComputedStyle(inputEl);
+    let lh = parseFloat(cs.lineHeight);
+    if (isNaN(lh)) lh = parseFloat(cs.fontSize) * 1.65;
+    const padTop = parseFloat(cs.paddingTop) || 0;
+
+    const lineTop = padTop + (line - 1) * lh;
+    const viewTop = inputEl.scrollTop;
+    const viewBottom = viewTop + inputEl.clientHeight;
+
+    if (lineTop >= viewTop + 4 && lineTop + lh <= viewBottom - 4) return;
+
+    inputEl.scrollTop = Math.max(0, lineTop - inputEl.clientHeight / 2 + lh / 2);
+    syncScroll();
+  }
+
+  /* ================= 代码片段渲染 ================= */
+
+  function renderSnippet(raw, pos) {
+    if (pos == null) return '';
+    const lines = raw.split('\n');
+    const { line, col } = indexToLineCol(raw, pos);
+    if (!line) return '';
+
+    const from = Math.max(1, line - 2);
+    const to   = Math.min(lines.length, line + 2);
+
+    let html = '';
+    for (let i = from; i <= to; i++) {
+      let text = lines[i - 1];
+      let c = (i === line) ? col : -1;
+
+      if (text.length > 180 && c > 0) {
+        const start = Math.max(0, c - 80);
+        const end = Math.min(text.length, start + 180);
+        const prefix = start > 0 ? '…' : '';
+        const suffix = end < text.length ? '…' : '';
+        text = prefix + text.slice(start, end) + suffix;
+        c = prefix.length + (c - start);
+      } else if (text.length > 180) {
+        text = text.slice(0, 180) + '…';
+      }
+
+      if (i === line) {
+        const safeC = Math.max(1, Math.min(c, text.length + 1));
+        const before = text.slice(0, safeC - 1);
+        const target = text.slice(safeC - 1, safeC);
+        const after  = text.slice(safeC);
+        html += `<div class="code-line bad">`
+              + `<span class="ln">${i}</span>`
+              + `<span class="src">${esc(before)}`
+              + (target ? `<mark>${esc(target)}</mark>` : `<mark>␠</mark>`)
+              + `${esc(after)}</span></div>`;
+      } else {
+        html += `<div class="code-line"><span class="ln">${i}</span>`
+              + `<span class="src">${esc(text)}</span></div>`;
+      }
+    }
+    return html;
+  }
+
+  function buildErrorHTML(diag, rawMsg, raw) {
+    const pos = diag.pos;
+    let meta;
+    if (pos != null) {
+      const { line, col } = indexToLineCol(raw, pos);
+      meta = `第 ${line} 行，第 ${col} 列（第 ${pos} 个字符）`;
+    } else {
+      meta = '位置未知';
+    }
+
+    let shortMsg = String(rawMsg || '').replace(/^JSON\.parse:\s*/i, '');
+    if (shortMsg.length > 130) shortMsg = shortMsg.slice(0, 130) + '…';
+
+    const snippet = renderSnippet(raw, pos);
+
+    return `
+      <div class="err-head">
+        <div class="err-icon">✕</div>
+        <div>
+          <div class="err-title">无法格式化：JSON 语法错误</div>
+          <div class="err-meta">${esc(meta)}${shortMsg ? ' · ' + esc(shortMsg) : ''}</div>
+        </div>
+      </div>
+      ${diag.reason ? `
+      <div class="err-section">
+        <div class="err-label">原因</div>
+        <div class="err-text">${esc(diag.reason)}</div>
+      </div>` : ''}
+      ${snippet ? `
+      <div class="err-section">
+        <div class="err-label">出错位置</div>
+        <div class="err-code">${snippet}</div>
+      </div>` : ''}
+      ${diag.tips && diag.tips.length ? `
+      <div class="err-section">
+        <div class="err-label">修复建议</div>
+        <ul class="err-tips">${diag.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+      </div>` : ''}
+      ${pos != null ? `
+      <button class="err-jump" type="button" data-pos="${pos}">↩ 在原始 JSON 中定位</button>` : ''}
+    `;
+  }
+
+  /* ================= 输出面板状态 ================= */
+
+  function showErrorCard(html) {
+    errorCard.innerHTML = html;
+    errorCard.hidden = false;
+    outputEl.hidden = true;
+  }
+
+  function hideErrorCard() {
+    errorCard.hidden = true;
+    errorCard.innerHTML = '';
+    outputEl.hidden = false;
+  }
+
+  function setOutputAvailable(avail) {
+    copyBtn.disabled = !avail;
+    downloadBtn.disabled = !avail;
+    expandBtn.disabled = !avail;
+    collapseBtn.disabled = !avail;
+  }
+
+  // 卡片里的「在原始 JSON 中定位」按钮
+  errorCard.addEventListener('click', (e) => {
+    const btn = e.target.closest('.err-jump');
+    if (!btn) return;
+    const pos = Number(btn.dataset.pos);
+    scrollToError(pos);
+    inputEl.focus();
+    toast('已定位到出错位置');
+  });
+
+  /* ================= JSON 树渲染（支持展开 / 折叠） ================= */
+
+  const INDENT_PX = 16;
+
+  function countNodes(root) {
+    let n = 0;
+    const stack = [root];
+    while (stack.length) {
+      const cur = stack.pop();
+      n++;
+      if (Array.isArray(cur)) {
+        for (let i = 0; i < cur.length; i++) stack.push(cur[i]);
+      } else if (cur && typeof cur === 'object') {
+        for (const k in cur) {
+          if (Object.prototype.hasOwnProperty.call(cur, k)) stack.push(cur[k]);
+        }
+      }
+    }
+    return n;
+  }
+
+  function renderNode(value, key, depth, comma, maxOpenDepth) {
+    const pad = depth * INDENT_PX;
+    const keyHtml = (key === null)
+      ? ''
+      : `<span class="t-key">${esc(JSON.stringify(key))}</span><span class="t-punct">: </span>`;
+    const commaHtml = comma ? '<span class="t-punct">,</span>' : '';
+    const slot = (cls) => `<span class="t-toggle${cls}"></span>`;
+
+    /* ---- 叶子：null / string / number / boolean ---- */
+    if (value === null) {
+      return `<div class="t-line" style="padding-left:${pad}px">`
+        + slot(' t-toggle-empty') + keyHtml
+        + `<span class="t-null">null</span>${commaHtml}</div>`;
+    }
+    const t = typeof value;
+    if (t === 'string' || t === 'number' || t === 'boolean') {
+      const cls = t === 'string' ? 't-str' : t === 'number' ? 't-num' : 't-bool';
+      const txt = (t === 'string') ? JSON.stringify(value) : String(value);
+      return `<div class="t-line" style="padding-left:${pad}px">`
+        + slot(' t-toggle-empty') + keyHtml
+        + `<span class="${cls}">${esc(txt)}</span>${commaHtml}</div>`;
+    }
+
+    /* ---- 容器：object / array ---- */
+    const isArr = Array.isArray(value);
+    const keys = isArr ? null : Object.keys(value);
+    const len = isArr ? value.length : keys.length;
+    const open = isArr ? '[' : '{';
+    const close = isArr ? ']' : '}';
+
+    if (len === 0) {
+      return `<div class="t-line" style="padding-left:${pad}px">`
+        + slot(' t-toggle-empty') + keyHtml
+        + `<span class="t-punct">${open}${close}</span>${commaHtml}</div>`;
+    }
+
+    let children = '';
+    if (isArr) {
+      for (let i = 0; i < len; i++) {
+        children += renderNode(value[i], null, depth + 1, i < len - 1, maxOpenDepth);
+      }
+    } else {
+      for (let i = 0; i < len; i++) {
+        children += renderNode(value[keys[i]], keys[i], depth + 1, i < len - 1, maxOpenDepth);
+      }
+    }
+
+    const isOpen = depth < maxOpenDepth ? 'is-open' : '';
+    const summary = `… ${len} ${isArr ? '项' : '个字段'} …`;
+
+    return `<div class="t-node ${isOpen}">`
+      + `<div class="t-line t-open-line" style="padding-left:${pad}px">`
+      +   `<span class="t-toggle" data-toggle="1" role="button" aria-label="展开或折叠"></span>`
+      +   keyHtml
+      +   `<span class="t-punct">${open}</span>`
+      +   `<span class="t-collapsed">`
+      +     `<span class="t-summary">${summary}</span>`
+      +     `<span class="t-punct">${close}</span>${commaHtml}`
+      +   `</span>`
+      + `</div>`
+      + `<div class="t-children">${children}</div>`
+      + `<div class="t-line t-close-line" style="padding-left:${pad}px">`
+      +   slot(' t-toggle-empty')
+      +   `<span class="t-punct">${close}</span>${commaHtml}`
+      + `</div>`
+      + `</div>`;
+  }
+
+  function renderTree(data) {
+    let total = 0;
+    try { total = countNodes(data); } catch (e) { total = 0; }
+    const maxOpenDepth = total > AUTO_COLLAPSE_THRESHOLD ? 1 : Infinity;
+
+    outputEl.innerHTML = `<div class="json-tree">${renderNode(data, null, 0, false, maxOpenDepth)}</div>`;
+    outputEl.scrollTop = 0;
+    outputEl.scrollLeft = 0;
+
+    if (maxOpenDepth !== Infinity) {
+      toast('数据较大，已自动折叠部分层级');
+    }
+  }
+
+  /* 点击三角切换单个节点 */
+  outputEl.addEventListener('click', (e) => {
+    const tg = e.target.closest('.t-toggle');
+    if (!tg || tg.classList.contains('t-toggle-empty')) return;
+    const node = tg.closest('.t-node');
+    if (!node) return;
+    node.classList.toggle('is-open');
+  });
+
+  /* 全部展开 / 全部折叠 */
+  function setAllNodes(open) {
+    const nodes = outputEl.querySelectorAll('.t-node');
+    if (!nodes.length) return;
+    nodes.forEach(n => n.classList.toggle('is-open', open));
+    if (!open) {
+      // 折叠后保留根节点展开，至少能看到第一层
+      const root = outputEl.querySelector('.json-tree > .t-node');
+      if (root) root.classList.add('is-open');
+    }
+    toast(open ? '已全部展开' : '已全部折叠');
+  }
+
+  expandBtn.addEventListener('click', () => setAllNodes(true));
+  collapseBtn.addEventListener('click', () => setAllNodes(false));
+
+  /* ================= 核心：格式化 ================= */
+
+  function format() {
+    const raw = inputEl.value;
+
+    if (!raw.trim()) {
+      currentFormatted = '';
+      currentParsed = null;
+      outputEl.innerHTML = '';
+      hideErrorCard();
+      setStatus('');
+      setOutputAvailable(false);
+      updateHighlight(raw, null);
+      inputHint.textContent = '支持把文件拖到这里';
+      lastErrPos = null;
+      return;
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      const diag = diagnose(raw, e);
+      currentFormatted = '';
+      currentParsed = null;
+      outputEl.innerHTML = '';
+      showErrorCard(buildErrorHTML(diag, e.message, raw));
+      setStatus('⚠ JSON 语法错误', true);
+      setOutputAvailable(false);
+      updateHighlight(raw, diag.pos);
+
+      if (diag.pos != null) {
+        const { line, col } = indexToLineCol(raw, diag.pos);
+        inputHint.textContent = `出错位置：第 ${line} 行，第 ${col} 列`;
+        if (lastErrPos !== diag.pos) {
+          scrollToError(diag.pos);
+          lastErrPos = diag.pos;
+        }
+      } else {
+        inputHint.textContent = '存在语法错误';
+        lastErrPos = null;
+      }
+      return;
+    }
+
+    hideErrorCard();
+    updateHighlight(raw, null);
+    inputHint.textContent = '支持把文件拖到这里';
+    lastErrPos = null;
+
+    currentParsed = parsed;
+
+    const ind = getIndent();
+    currentFormatted = (ind === null)
+      ? JSON.stringify(parsed)
+      : JSON.stringify(parsed, null, ind);
+
+    renderTree(parsed);
+    setOutputAvailable(true);
+
+    setStatus(formatSize(byteLen(currentFormatted)) + ' · '
+            + currentFormatted.split('\n').length + ' 行');
+  }
+
+  /* ================= 校验 ================= */
+
+  function hideBadge() {
+    badgeEl.hidden = true;
+    badgeEl.textContent = '';
+    badgeEl.classList.remove('ok', 'bad');
+  }
+
+  function showBadge(ok) {
+    badgeEl.hidden = false;
+    badgeEl.textContent = ok ? '[有效的 JSON object]' : '[无效的 JSON object]';
+    badgeEl.classList.toggle('ok', ok);
+    badgeEl.classList.toggle('bad', !ok);
+    badgeEl.style.animation = 'none';
+    void badgeEl.offsetWidth;
+    badgeEl.style.animation = '';
+  }
+
+  function validate() {
+    const raw = inputEl.value;
+    let ok = false;
+    if (raw.trim() !== '') {
+      try { JSON.parse(raw); ok = true; } catch (e) { ok = false; }
+    }
+    showBadge(ok);
+    format();
+    if (!ok) toast('JSON 校验未通过，已在原始内容中标出问题位置');
+  }
+
+  /* ================= 文件读取 ================= */
+
+  function readFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      inputEl.value = reader.result;
+      fileName = file.name;
+      fileInfoEl.textContent = file.name + ' · ' + formatSize(file.size);
+      hideBadge();
+      lastErrPos = null;
+      format();
+      toast('已读取：' + file.name);
+    };
+    reader.onerror = () => toast('读取文件失败');
+    reader.readAsText(file, 'utf-8');
+  }
+
+  /* ================= 复制 / 下载 ================= */
+
+  async function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      try { await navigator.clipboard.writeText(text); return true; } catch (e) {}
+    }
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    ta.remove();
+    return ok;
+  }
+
+  /* ================= 事件绑定 ================= */
+
+  inputEl.addEventListener('input', () => {
+    hideBadge();
+    clearTimeout(timer);
+    if (inputEl.value.length < 100000) format();
+    else timer = setTimeout(format, 250);
+  });
+
+  inputEl.addEventListener('scroll', syncScroll);
+
+  indentEl.addEventListener('change', format);
+
+  $('#validate').addEventListener('click', validate);
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      validate();
+    }
+  });
+
+  $('#pick').addEventListener('click', () => $('#file').click());
+  $('#file').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) readFile(f);
+    e.target.value = '';
+  });
+
+  $('#clear').addEventListener('click', () => {
+    inputEl.value = '';
+    fileName = '';
+    fileInfoEl.textContent = '';
+    hideBadge();
+    lastErrPos = null;
+    format();
+    inputEl.focus();
+  });
+
+  // 拖拽读取
+  ['dragenter', 'dragover'].forEach((ev) =>
+    inputPanel.addEventListener(ev, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      inputPanel.classList.add('drag-over');
+    })
+  );
+  ['dragleave', 'drop'].forEach((ev) =>
+    inputPanel.addEventListener(ev, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (ev === 'dragleave' && inputPanel.contains(e.relatedTarget)) return;
+      inputPanel.classList.remove('drag-over');
+    })
+  );
+  inputPanel.addEventListener('drop', (e) => {
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) readFile(f);
+  });
+  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('drop', (e) => e.preventDefault());
+
+  // 复制
+  copyBtn.addEventListener('click', async () => {
+    if (!currentFormatted) { toast('没有可复制的内容'); return; }
+    const ok = await copyText(currentFormatted);
+    toast(ok ? '已复制到剪贴板' : '复制失败，请手动选择复制');
+  });
+
+  // 下载
+  downloadBtn.addEventListener('click', () => {
+    if (!currentFormatted) { toast('没有可下载的内容'); return; }
+    const base = (fileName || 'formatted').replace(/\.[^.]+$/, '') || 'formatted';
+    const blob = new Blob([currentFormatted], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = base + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    toast('已开始下载');
+  });
+
+  // 尺寸变化时重新对齐高亮层
+  if (window.ResizeObserver) {
+    new ResizeObserver(syncLayerWidth).observe(editorWrap);
+  } else {
+    window.addEventListener('resize', syncLayerWidth);
+  }
+
+  /* ================= 初始化 ================= */
+  initTheme();
+  setOutputAvailable(false);
+  format();
+  requestAnimationFrame(syncLayerWidth);
+})();
+</script>
+</body>
+</html>
